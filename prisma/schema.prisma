@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model activity_logs {
+  id          BigInt    @id @default(autoincrement())
+  user_id     BigInt?
+  action      String?   @db.VarChar(255)
+  target_type String?   @db.VarChar(50)
+  target_id   BigInt?
+  metadata    Json?     @db.Json
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  users       users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model companies {
+  id             BigInt           @id
+  name           String           @db.VarChar(255)
+  description    String?
+  contact_email  String?          @db.VarChar(255)
+  created_at     DateTime?        @default(now()) @db.Timestamp(6)
+  updated_at     DateTime?        @default(now()) @db.Timestamp(6)
+  location_types location_types[]
+  locations      locations[]
+  users          users[]
+}
+
+model hygiene_scores {
+  id           BigInt     @id @default(autoincrement())
+  location_id  BigInt?
+  score        Decimal?   @db.Decimal(5, 2)
+  details      Json?      @db.Json
+  image_url    String?    @db.VarChar(255)
+  inspected_at DateTime   @db.Timestamp(6)
+  created_by   BigInt?
+  created_at   DateTime?  @default(now()) @db.Timestamp(6)
+  users        users?     @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  locations    locations? @relation(fields: [location_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model locations {
+  id              BigInt                   @id @default(autoincrement())
+  name            String                   @db.VarChar(255)
+  parent_id       BigInt?
+  company_id      BigInt?
+  latitude        Float?
+  longitude       Float?
+  metadata        Json?                    @db.Json
+  created_at      DateTime?                @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?                @default(now()) @db.Timestamp(6)
+  type_id         BigInt?
+  options         Json?                    @default("{}")
+  lang_preference String?                  @db.VarChar(255)
+  geom            Unsupported("geometry")?
+  hygiene_scores  hygiene_scores[]
+  companies       companies?               @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  locations       locations?               @relation("locationsTolocations", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_locations locations[]              @relation("locationsTolocations")
+  location_types  location_types?          @relation(fields: [type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([geom], map: "idx_locations_geom", type: Gist)
+}
+
+model location_types {
+  id                   BigInt           @id @default(autoincrement())
+  name                 String           @db.VarChar(100)
+  parent_id            BigInt?
+  company_id           BigInt?
+  sort_order           Int?
+  created_at           DateTime?        @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?        @default(now()) @db.Timestamp(6)
+  is_toilet            Boolean?
+  companies            companies?       @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  location_types       location_types?  @relation("location_typesTolocation_types", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_location_types location_types[] @relation("location_typesTolocation_types")
+  locations            locations[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model review {
+  id            BigInt          @id @default(autoincrement())
+  user_id       BigInt
+  site_id       Int
+  rating        Int?
+  comment       String?
+  image_urls    String[]
+  created_at    DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at    DateTime?       @default(now()) @db.Timestamp(6)
+  review_photos review_photos[]
+}
+
+model review_photos {
+  id         BigInt    @id
+  user_id    BigInt?
+  image_url  String?   @db.VarChar(255)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  review     review?   @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model sessions {
+  id         BigInt    @id @default(autoincrement())
+  user_id    BigInt?
+  token      String?   @unique @db.VarChar(255)
+  expires_at DateTime? @db.Timestamp(6)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  users      users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model users {
+  id             BigInt           @id @default(autoincrement())
+  name           String           @db.VarChar(255)
+  email          String           @unique @db.VarChar(255)
+  password       String
+  company_id     BigInt?
+  created_at     DateTime?        @default(now()) @db.Timestamp(6)
+  updated_at     DateTime?        @default(now()) @db.Timestamp(6)
+  phone          String?          @db.VarChar(15) @unique 
+  role_id        String?          @db.VarChar(15)
+  activity_logs  activity_logs[]
+  hygiene_scores hygiene_scores[]
+  sessions       sessions[]
+  companies      companies?       @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model configurations {
+  id          BigInt   @id @default(autoincrement())
+  name        String   @unique @db.VarChar(255)
+  description Json?
+  company_id  BigInt?
+  is_active   Boolean  @default(false)
+  notes       String?
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model cleaner_review {
+  id         BigInt    @id @default(autoincrement())
+  name       String
+  phone      String
+  remarks    String?
+  images     String[]
+  latitude   Float?
+  longitude  Float?
+  address    String?
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @default(now()) @db.Timestamptz(6)
+  site_id    BigInt?
+}
+
+model user_review {
+  id          BigInt    @id @default(autoincrement())
+  toilet_id   BigInt?
+  name        String?   @db.VarChar(100)
+  email       String?   @db.VarChar(100)
+  phone       String?   @db.VarChar(20)
+  rating      Float?
+  description String?
+  reason_ids  Int[]
+  images      String[]
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime? @default(now()) @db.Timestamptz(6)
+  longitude   Float?
+  latitude    Float?
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model spatial_ref_sys {
+  srid      Int     @id
+  auth_name String? @db.VarChar(256)
+  auth_srid Int?
+  srtext    String? @db.VarChar(2048)
+  proj4text String? @db.VarChar(2048)
+}
